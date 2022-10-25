@@ -73,3 +73,13 @@ PlatformControlState		    gPlatformControlState;
 PlatformStatusInfo			    gPlatformStatusInfo;
 PowerControlResult			    gPowerControlResult;
 AcousticCommInfo			    gAcousticCommInfo;
+
+
+
+
+
+
+
+
+
+

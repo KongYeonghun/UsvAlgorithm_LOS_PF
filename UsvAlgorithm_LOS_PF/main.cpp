@@ -787,3 +787,20 @@ float degree_noise(void)
 	std::uniform_real_distribution<float> dis(-3, 3);
 	return dis(gen);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
