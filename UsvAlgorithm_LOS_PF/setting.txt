@@ -1,0 +1,41 @@
+[IP_ADDRESS]
+
+ControlPost_IP = 192.168.10.20
+ControlPost_PORT = 60020
+
+SystemCtrl_IP = 192.168.10.23
+SystemCtrl_PORT_CP = 60021
+SystemCtrl_PORT_AS = 60022
+SystemCtrl_PORT_PC = 60023
+SystemCtrl_PORT_KI = 60024
+SystemCtrl_PORT_MF = 60025
+SystemCtrl_PORT_AD = 60026
+SystemCtrl_PORT_UA = 61589
+
+AutoSailing_IP = 192.168.10.23
+AutoSailing_PORT = 60027
+
+PlatformControl_IP = 192.168.10.24
+PlatformControl_PORT = 60032
+
+MissionK_IP = 192.168.10.25
+MissionK_PORT = 60033
+
+MissionF_IP = 192.168.10.26
+MissionF_PORT = 60034
+
+UsvAlgorithm_IP = 192.168.10.23
+UsvAlgorithm_PORT = 61563
+
+AutoDocking_IP= 192.168.10.50
+AutoDocking_PORT= 60035
+
+
+
+
+Time_LossOfComm = 5
+Time_EmergencyReturn = 300000
+
+Emergency_Latitude = 36.3636;
+Emergency_longitude = 123.123123;
+
