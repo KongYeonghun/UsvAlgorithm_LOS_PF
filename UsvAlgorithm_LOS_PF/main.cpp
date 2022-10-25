@@ -48,10 +48,10 @@ int main(void)
         exit(0);
     }
 
-	// thread CommunicationUDP(mCommunicationUDP);
+	thread CommunicationUDP(mCommunicationUDP);
 	thread PotentialFieldAlgorithm(mPotentialFieldAlgorithm);
 
-	// CommunicationUDP.join();
+	CommunicationUDP.join();
 	PotentialFieldAlgorithm.join();
 
 	return 0;
