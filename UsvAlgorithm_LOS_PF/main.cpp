@@ -48,17 +48,6 @@ int main(void)
         exit(0);
     }
 
-	thread CommunicationUDP(mCommunicationUDP);
-	thread PotentialFieldAlgorithm(mPotentialFieldAlgorithm);
-
-	CommunicationUDP.join();
-	PotentialFieldAlgorithm.join();
-
-	return 0;
-}
-
-void mCommunicationUDP()
-{
 	char Buffer[BUFFER_SIZE];
 
 	Header						    mHeader;
@@ -80,14 +69,10 @@ void mCommunicationUDP()
 	PowerControlResult			    mPowerControlResult;
 	AcousticCommInfo			    mAcousticCommInfo;
 
+	memset(&mUSVModeCommand, 0, sizeof(mUSVModeCommand));
+
 	while(1)
 	{
-		Sleep(100);//0.1s
-
-		/******************************************************************/
-		//WP,USV communication
-		/******************************************************************/
-		memset(Buffer, 0, BUFFER_SIZE);
 		ServerSystemCtrl_UsvAlgorithm_Socket.ClientToServer_Recv(Buffer, ServerSystemCtrl_UsvAlgorithm_Socket);
 
 		memcpy(&mHeader,(Header*)&Buffer, sizeof(mHeader));
@@ -97,83 +82,56 @@ void mCommunicationUDP()
 			case 0x1401:
 			{
 				ServerSystemCtrl_UsvAlgorithm_Socket.MessageClassification(Buffer, &mUSVModeCommand);
-
-				m_mutex.lock();
-				memcpy(&gUSVModeCommand, &mUSVModeCommand, sizeof(mUSVModeCommand));
-				m_mutex.unlock();
-
 				cout << "mUSVModeCommand.ModeDetail : " << mUSVModeCommand.ModeDetail << endl;
+				cout << "mUSVModeCommand.AlgSelect : " << (int)mUSVModeCommand.AlgSelect << endl;
 			}
 			break;
 			case 0x1402:
 			{
 				ServerSystemCtrl_UsvAlgorithm_Socket.MessageClassification(Buffer, &mMissionRecordInfo);
-
-				m_mutex.lock();
-				memcpy(&gMissionRecordInfo, &mMissionRecordInfo, sizeof(gMissionRecordInfo));
-				m_mutex.unlock();
-
-				cout << "mMissionRecordInfo.MissionPointCount : " << mMissionRecordInfo.MissionPointCount << endl;
+				cout << "/**************** MissionPointCount ******************/: " << mMissionRecordInfo.MissionPointCount << endl;
 			}
 			break;
 			case 0x1403:
 			{
 				ServerSystemCtrl_UsvAlgorithm_Socket.MessageClassification(Buffer, &mNavigationInfo);
 
-				m_mutex.lock();
-				memcpy(&gNavigationInfo, &mNavigationInfo, sizeof(gNavigationInfo));
-				m_mutex.unlock();
-
-				cout << "mNavigationInfo.Latitude : " << mNavigationInfo.Latitude << endl;
+				cout << "Navi.Latitude : [ " << (double) mNavigationInfo.Latitude	 	
+				<< " ] , Navi.Longitude : [ " << (double) mNavigationInfo.Longitude 		
+				<< " ] , Navi.Heading : [ " << mNavigationInfo.Heading 		
+				<< " ] , Navi.Velocity : " << mNavigationInfo.Velocity	 	<< endl;
 			}
 			break;
 			case 0x1404:
 			{
 				ServerSystemCtrl_UsvAlgorithm_Socket.MessageClassification(Buffer, &mFlexTargetInfo);
 
-				m_mutex.lock();
-				memcpy(&gFlexTargetInfo, &mFlexTargetInfo, sizeof(gFlexTargetInfo));
-				m_mutex.unlock();
-
-				cout << "mFlexTargetInfo.TargetCount : " << mFlexTargetInfo.TargetCount << endl;
+				cout << "mFlexTargetInfo.TargetCount : [ " << mFlexTargetInfo.TargetCount << " ] "<<endl;
 			}
 			break;
+		}// switch
+
+		memset(&mAutoNaviStatusInfo , 0 ,sizeof(mAutoNaviStatusInfo));
+		mAutoNaviStatusInfo = PotentailField(mUSVModeCommand, mMissionRecordInfo, mNavigationInfo, mFlexTargetInfo );
+
+		if (mUSVModeCommand.ModeDetail == 3 && mUSVModeCommand.AlgSelect == 2) // 운용모드 확인 후 자율 운항 시작
+		{
+			cout << "LOS_PF_heading : [ " << mAutoNaviStatusInfo.Heading << " ] , LOS_PF_velocity : [ " << mAutoNaviStatusInfo.Velocity << " ] " << endl;
+
+			ServerSystemCtrl_UsvAlgorithm_Socket.HeaderSetting(&mHeader, 0x27, 0x21, 0x1501, sizeof(mAutoNaviStatusInfo), 0);
+			ServerSystemCtrl_UsvAlgorithm_Socket.MessageCombination(Buffer, mHeader, mAutoNaviStatusInfo);
+			ServerSystemCtrl_UsvAlgorithm_Socket.ClientToServer_Send(Buffer, ServerSystemCtrl_UsvAlgorithm_Socket, COMM_HEADER_SIZE + mHeader.Payload_Length);
 		}
-		/******************************************************************/
-		//WP,USV communication
-		/******************************************************************/
-		
-		/******************************************************************/
-		//WP,USV communication
-		/******************************************************************/
-
-		memset(Buffer, 0, BUFFER_SIZE);
-
-		// m_mutex.lock();
-		// ServerSystemCtrl_UsvAlgorithm_Socket.HeaderSetting(&mHeader, 0xff, 0xff, 0x1501, sizeof(AutoNaviStatusInfo), 0xff);
-		// ServerSystemCtrl_UsvAlgorithm_Socket.MessageCombination(Buffer, mHeader, gAutoNaviStatusInfo);
-		// ServerSystemCtrl_UsvAlgorithm_Socket.ClientToServer_Send(Buffer, ServerSystemCtrl_UsvAlgorithm_Socket, COMM_HEADER_SIZE + mHeader.Payload_Length);
-		// m_mutex.unlock();
-	}
-
-	ServerSystemCtrl_UsvAlgorithm_Socket.UDP_CLIENT_CLOSE();
+	}//while
+	return 0;
 }
 
-void mPotentialFieldAlgorithm()
-{
-	PotentailField();
-}
-
-int PotentailField()
+AutoNaviStatusInfo PotentailField(USVModeCommand mUSVModeCommand, MissionRecordInfo mMissionRecordInfo, NavigationInfo mNavigationInfo,FlexTargetInfo mFlexTargetInfo )
 {
 	//ICD message
 	//AutoSailing -> UsvAlgorithm
 	Header						    mHeader;
-	MissionRecordInfo			    mMissionRecordInfo;
-	NavigationInfo				    mNavigationInfo;
-	RadarTargetInfo				    mRadarTargetInfo;
-	LidarTargetInfo				    mLidarTargetInfo;
-	FlexTargetInfo				    mFlexTargetInfo;
+	
 	//UsvAlgorithm -> AutoSailing
 	AutoNaviStatusInfo			    mAutoNaviStatusInfo;
 
@@ -191,237 +149,53 @@ int PotentailField()
 	memset(&pre_m_stUsvGoalHnV		,0, sizeof(pre_m_stUsvGoalHnV)		);
 	memset(&m_stUSVMotion		,0, sizeof(m_stUSVMotion)		);
 
-
-	//this code is typed for simulator
-	// m_stWPInfo.stnWPnum = 0;
-	// m_stWPInfo.stnWPsize = 5;
-	// // rhomsbus waypoint
-	// m_stWPInfo.stdWPUTME[0] = 300;
-	// m_stWPInfo.stdWPUTMN[0] = 100;
-
-	// m_stWPInfo.stdWPUTME[1] = 300;
-	// m_stWPInfo.stdWPUTMN[1] = 300;
-
-	// m_stWPInfo.stdWPUTME[2] = 100;
-	// m_stWPInfo.stdWPUTMN[2] = 300;
-
-	// m_stWPInfo.stdWPUTME[3] = 100;
-	// m_stWPInfo.stdWPUTMN[3] = 100;
-
-	// m_stWPInfo.stdWPUTME[4] = 300;
-	// m_stWPInfo.stdWPUTMN[4] = 300;
-
-	// // m_stWPInfo.stdWPUTME[0] = 100;
-	// // m_stWPInfo.stdWPUTMN[0] = 300;
-
-	// // m_stWPInfo.stdWPUTME[1] = 300;
-	// // m_stWPInfo.stdWPUTMN[1] = 500;
-
-	// // m_stWPInfo.stdWPUTME[2] = 500;
-	// // m_stWPInfo.stdWPUTMN[2] = 300;
-
-	// // m_stWPInfo.stdWPUTME[3] = 300;
-	// // m_stWPInfo.stdWPUTMN[3] = 100;
-
-	// // m_stWPInfo.stdWPUTME[4] = 100;
-	// // m_stWPInfo.stdWPUTMN[4] = 300;
-
-	// // usv, obs HardCoding.
-	// // m_stWPInfo.stdWPUTME[0] = 100;
-	// // m_stWPInfo.stdWPUTMN[0] = 300;
-
-	// // m_stWPInfo.stdWPUTME[1] = 300;
-	// // m_stWPInfo.stdWPUTMN[1] = 300;
-
-	// // m_stWPInfo.stdWPUTME[2] = 300;
-	// // m_stWPInfo.stdWPUTMN[2] = 100;
-
-	// // m_stWPInfo.stdWPUTME[3] = 100;
-	// // m_stWPInfo.stdWPUTMN[3] = 100;
-
-	// m_stWPInfo.stdWPMaxVel[0] = 10;//m/s
-	// m_stWPInfo.stdWPMaxVel[1] = 10;//m/s
-	// m_stWPInfo.stdWPMaxVel[2] = 10;//m/s
-	// m_stWPInfo.stdWPMaxVel[3] = 10;//m/s
-	// m_stWPInfo.stdWPMaxVel[4] = 10;//m/s
-
-	// m_stWPInfo.stdWPAcceptRadius[0] = 20;
-	// m_stWPInfo.stdWPAcceptRadius[1] = 20;
-	// m_stWPInfo.stdWPAcceptRadius[2] = 20;
-	// m_stWPInfo.stdWPAcceptRadius[3] = 20;
-	// m_stWPInfo.stdWPAcceptRadius[4] = 20;
-
-	// m_stUSVMotion.stdUTME = 100;
-	// m_stUSVMotion.stdUTMN = 100;
-	// m_stUSVMotion.stdSOG = 1;//m/s
-	// m_stUSVMotion.stdCOG = 90;//degree
-
-	// memset(&m_stTargetMotion, 0 ,sizeof(m_stTargetMotion));
-	// m_stTargetMotion.stnNumObj = 20;
-
-	// for(int i=0; i<10; i++)
-	// {
-	// 	m_stTargetMotion.stdUTME[i] = 100 + i*3;
-	// 	m_stTargetMotion.stdUTMN[i] = 200;
-	// }
-	// for(int i=10; i<20; i++)
-	// {
-		
-	// 	m_stTargetMotion.stdUTME[i] = 100 - i*3;
-	// 	m_stTargetMotion.stdUTMN[i] = 200;
-	// }
-	//this code is typed for simulator	
-
 	DataLogging_Init();
-
 
 	char Buffer[BUFFER_SIZE];
 
 	memset(&pre_m_stUsvGoalHnV, 0, sizeof(pre_m_stUsvGoalHnV));
 	memset(&m_stUsvGoalHnV, 0, sizeof(m_stUsvGoalHnV));
 
-	while(1)
+
+	//Usv Setting
+	//this code is typed for real test
+
+	m_stUSVMotion.stdSOG	= 	mNavigationInfo.Velocity;
+	m_stUSVMotion.stdCOG	=	mNavigationInfo.Heading;
+	mCCoordinateConv.WGS2UTM(mNavigationInfo.Latitude, mNavigationInfo.Longitude);
+	m_stUSVMotion.stdUTMN	=	mCCoordinateConv.getUTMN();
+	m_stUSVMotion.stdUTME	=	mCCoordinateConv.getUTME();
+
+	m_mutex.lock();
+
+	for(int i = 0; i < DEF_NUM_WP; i++)
 	{
-		// Sleep(1);//10ms
+		mCCoordinateConv.WGS2UTM(mMissionRecordInfo.Waypoint[i].Latitude, mMissionRecordInfo.Waypoint[i].Longitude);
+		m_stWPInfo.stnWPsize			= (int) mMissionRecordInfo.MissionPointCount		;
+		m_stWPInfo.stdWPUTMN[i]			= mCCoordinateConv.getUTMN()				;
+		m_stWPInfo.stdWPUTME[i]			= mCCoordinateConv.getUTME()				;
+		m_stWPInfo.stdWPMaxVel[i]		= mMissionRecordInfo.Waypoint[i].Velocity	;
+		m_stWPInfo.stdWPAcceptRadius[i]	= mMissionRecordInfo.PathRange				;
+	}
+	m_mutex.unlock();
 
-		//Usv Setting
-		//this code is typed for real test
-		m_mutex.lock();
+	cout << "/********/ PF_MissionPointCount : " << mMissionRecordInfo.MissionPointCount<< endl;
+	// for(int i = 0; i < DEF_NUM_TARGET; i++)
+	// {
+	// 	gCCoordinateConv.WGS2UTM(mMissionRecordInfo.Waypoint[i].Latitude, mMissionRecordInfo.Waypoint[i].Longitude);
+	// 	m_stTargetMotion.stdUTMN[i] = mCCoordinateConv.getUTMN();
+	// 	m_stTargetMotion.stdUTME[i] = mCCoordinateConv.getUTME();
+	// 	m_stTargetMotion.stdCOG[i] 	= mFlexTargetInfo.TargetInfo[i].Course;
+	// 	m_stTargetMotion.stdSOG[i] 	= mFlexTargetInfo.TargetInfo[i].Velocity;
+	// 	m_stTargetMotion.stdDISTANCE[i] = sqrt(pow(m_stUSVMotion.stdUTME - m_stTargetMotion.stdUTME[i], 2) + pow(m_stUSVMotion.stdUTMN - m_stTargetMotion.stdUTMN[i], 2));
+	// }
 
-		memcpy(&mNavigationInfo, &gNavigationInfo, sizeof(mNavigationInfo));
-		mCCoordinateConv.WGS2UTM(mNavigationInfo.Latitude, mNavigationInfo.Longitude);
-		m_stUSVMotion.stdUTMN	=	mCCoordinateConv.getUTMN();
-		m_stUSVMotion.stdUTME	=	mCCoordinateConv.getUTME();
-		memcpy(&mMissionRecordInfo, &gMissionRecordInfo, sizeof(mMissionRecordInfo));
-
-		for(int i = 0; i < DEF_NUM_WP; i++)
-		{
-			mCCoordinateConv.WGS2UTM(mMissionRecordInfo.Waypoint[i].Latitude, mMissionRecordInfo.Waypoint[i].Longitude);
-			// m_stWPInfo.stnWPsize			= (int) mMissionRecordInfo.MissionPointCount		;
-			// m_stWPInfo.stdWPUTMN[i]			= mCCoordinateConv.getUTMN()				;
-			// m_stWPInfo.stdWPUTME[i]			= mCCoordinateConv.getUTME()				;
-			// m_stWPInfo.stdWPMaxVel[i]		= mMissionRecordInfo.Waypoint[i].Velocity	;
-			// m_stWPInfo.stdWPAcceptRadius[i]	= mMissionRecordInfo.PathRange				;
-		}
-		
-		// for(int i = 0; i < DEF_NUM_TARGET; i++)
-		// {
-		// 	gCCoordinateConv.WGS2UTM(mMissionRecordInfo.Waypoint[i].Latitude, mMissionRecordInfo.Waypoint[i].Longitude);
-		// 	m_stTargetMotion.stdUTMN[i] = mCCoordinateConv.getUTMN();
-		// 	m_stTargetMotion.stdUTME[i] = mCCoordinateConv.getUTME();
-		// 	m_stTargetMotion.stdCOG[i] 	= mFlexTargetInfo.TargetInfo[i].Course;
-		// 	m_stTargetMotion.stdSOG[i] 	= mFlexTargetInfo.TargetInfo[i].Velocity;
-		// 	m_stTargetMotion.stdDISTANCE[i] = sqrt(pow(m_stUSVMotion.stdUTME - m_stTargetMotion.stdUTME[i], 2) + pow(m_stUSVMotion.stdUTMN - m_stTargetMotion.stdUTMN[i], 2));
-		// }
-
-		m_mutex.unlock();
-		//obs info setting
-		//this code is typed for real test
-
-	/***************************************************************************************/
-	//obstacle is the one.
-	/***************************************************************************************/
-
-		// /******************************************************************/
-		// //WP,USV communication
-		// /******************************************************************/
-		//obs info setting
-		//******************* This code is typed for simulator. ***************************//
-		//For Potential field code
-		// double dx = m_stTargetMotion.stdUTME[0] - m_stUSVMotion.stdUTME;
-		// double dy = m_stTargetMotion.stdUTMN[0] - m_stUSVMotion.stdUTMN;
-		// double distance_usv2obs = sqrt(dx * dx + dy * dy);
-		// if (dy > 0)
-		// {
-		// 	// double theta_obs_global = atan2(dx, dy) * DEF_RAD2DEG;//atan2
-		// 	double theta_obs_global = atan2(dy, dx) * DEF_RAD2DEG;//atan2
-		// 	// if (theta_obs_global <= 0)
-		// 	// 	theta_obs_global = -theta_obs_global;
-		// 	// else
-		// 	// 	theta_obs_global = 360 - theta_obs_global;
-
-		// 	theta_obs_global = 90 - theta_obs_global;
-
-		// 	// if(theta_obs_global > 0)
-		// 	// 	theta_obs_global = -theta_obs_global;
-
-		// 	// double theta_temp2=0;
-
-		// 	// theta_temp2 = 360 - m_stUSVMotion.stdCOG + theta_obs_global;
-		// 	// if (theta_temp2 >= 360)
-		// 	// 	theta_temp2 = theta_temp2 - 360;
-		// 	// else if(theta_temp2 < 0)
-		// 	// 	theta_temp2 = theta_temp2 + 360;
-		// 	// //change global coordinate to local coordinate(usv_heading)
-		// 	// if (theta_temp2 > 180)
-		// 	// 	theta_temp2 = -(360 - theta_temp2);
-
-		// 	m_stTargetMotion.stdCOG[0] = theta_obs_global;
-		// 	//set local coordinate(usv_heading), Clockwise is angle of minus, counterclockwise is angle of plus at local coordinate
-		// }
-
-		// cout << "m_stTargetMotion.stdCOG[0] : "<< m_stTargetMotion.stdCOG[0] << endl;
-
-		// m_stTargetMotion.stdDISTANCE[0] = sqrt(pow(m_stUSVMotion.stdUTME - m_stTargetMotion.stdUTME[0], 2) + pow(m_stUSVMotion.stdUTMN - m_stTargetMotion.stdUTMN[0], 2));
-		// m_stTargetMotion.stdDISTANCE[1] = sqrt(pow(m_stUSVMotion.stdUTME - m_stTargetMotion.stdUTME[1], 2) + pow(m_stUSVMotion.stdUTMN - m_stTargetMotion.stdUTMN[1], 2));
-		//******************* Code written so far is typed for simulator. ***************************//
-
-	/***************************************************************************************/
-	//obstacle is the one.
-	/***************************************************************************************/
-		//usv info setting
-		// //******************* This code is typed for simulator. ***************************//
-		// double m_distance = m_stUsvGoalHnV.velocity * mt;
-		// double m_theta = 0;
-
-		// if(m_stUSVMotion.stdCOG >= 360)
-		// 	m_stUSVMotion.stdCOG = m_stUSVMotion.stdCOG - 360;
-		// else if(m_stUSVMotion.stdCOG < 0)
-		// 	m_stUSVMotion.stdCOG = m_stUSVMotion.stdCOG + 360;
-		
-		// //시계 방향
-		// if (m_stUsvGoalHnV.heading < 90 && m_stUsvGoalHnV.heading >= 0)//1 quadrant
-		// {
-		// 	m_theta = m_stUsvGoalHnV.heading * DEF_DEG2RAD;
-		// 	m_stUSVMotion.stdUTMN = m_stUSVMotion.stdUTMN + m_distance * cos(m_theta);
-		// 	m_stUSVMotion.stdUTME = m_stUSVMotion.stdUTME + m_distance * sin(m_theta);
-		// }
-		// else if (m_stUsvGoalHnV.heading < 180 && m_stUsvGoalHnV.heading >= 90)//4 quadrant
-		// {
-		// 	m_theta = (180 - m_stUsvGoalHnV.heading) * DEF_DEG2RAD;
-		// 	m_stUSVMotion.stdUTME = m_stUSVMotion.stdUTME + m_distance * sin(m_theta);
-		// 	m_stUSVMotion.stdUTMN = m_stUSVMotion.stdUTMN - m_distance * cos(m_theta);
-		// }
-		// else if (m_stUsvGoalHnV.heading < 270 && m_stUsvGoalHnV.heading >= 180)//3 quadrant
-		// {
-		// 	m_theta = (m_stUsvGoalHnV.heading - 180) * DEF_DEG2RAD;
-		// 	m_stUSVMotion.stdUTMN = m_stUSVMotion.stdUTMN - m_distance * cos(m_theta);
-		// 	m_stUSVMotion.stdUTME = m_stUSVMotion.stdUTME - m_distance * sin(m_theta);
-		// }
-		// else if (m_stUsvGoalHnV.heading < 360 && m_stUsvGoalHnV.heading >= 270)//2 quadrant
-		// {
-		// 	m_theta = (360 - m_stUsvGoalHnV.heading) * DEF_DEG2RAD;
-		// 	m_stUSVMotion.stdUTMN = m_stUSVMotion.stdUTMN + m_distance * cos(m_theta);
-		// 	m_stUSVMotion.stdUTME = m_stUSVMotion.stdUTME - m_distance * sin(m_theta);
-		// }
-
-		// m_stUSVMotion.stdSOG = m_stUsvGoalHnV.velocity + velocity_noise();//m/s
-		// m_stUSVMotion.stdCOG = m_stUsvGoalHnV.heading + degree_noise();//degree
-
-		// cout <<"m_stUSVMotion.stdSOG : " << m_stUSVMotion.stdSOG << endl;
-		// cout <<"m_stUSVMotion.stdCOG : " << m_stUSVMotion.stdCOG << endl;
-
-		// if(m_stUSVMotion.stdCOG >= 360)
-		// 	m_stUSVMotion.stdCOG = m_stUSVMotion.stdCOG - 360;
-		// else if(m_stUSVMotion.stdCOG < 0)
-		// 	m_stUSVMotion.stdCOG = m_stUSVMotion.stdCOG + 360;
-
-		//******************* Code written so far is typed for simulator. ***************************//
-
-		/******************************************************************/
-		//check wp
-		/******************************************************************/
-		
+	/******************************************************************/
+	//check wp
+	/******************************************************************/
+	
+	if(mUSVModeCommand.ModeDetail == 3 && mUSVModeCommand.AlgSelect == 2) // 운용모드 확인 후 자율 운항 시작
+	{
 		double dutme_pow = pow( (m_stUSVMotion.stdUTME - m_stWPInfo.stdWPUTME[m_stWPInfo.stnWPnum]), 2);
 		double dutmn_pow = pow( (m_stUSVMotion.stdUTMN - m_stWPInfo.stdWPUTMN[m_stWPInfo.stnWPnum]), 2);
 		double distance_usv2wp = sqrt(dutme_pow + dutmn_pow);
@@ -432,79 +206,41 @@ int PotentailField()
 
 		if (m_stWPInfo.stdWPAcceptRadius[m_stWPInfo.stnWPnum] > distance_usv2wp)//check AcceptRadius
 		{
-			m_stWPInfo.stnWPnum++;
-			if (m_stWPInfo.stnWPnum >= m_stWPInfo.stnWPsize)//check last wp.
-				return 0;
+		m_stWPInfo.stnWPnum++;
+		if (m_stWPInfo.stnWPnum >= m_stWPInfo.stnWPsize)//check last wp.
+			exit(0);
 		}
-	
+
 		/******************************************************************/
 		//LOS, Obstacle avoidance
 		/******************************************************************/
 
 		stUsvGoalHnV temp_stUsvGoalHnV;
-		 int obs_flag=0;
-		// for(int i=0; i<m_stTargetMotion.stnNumObj;i++)
-		// {
-		// 	if (m_pf_init.AVOIDANCE_RADIUS > m_stTargetMotion.stdDISTANCE[0] && m_stTargetMotion.stdCOG[0] < 30 && m_stTargetMotion.stdCOG[0] > -30 )// check to detect obstacle in the front
-		// 	{
-		// 		temp_stUsvGoalHnV = ObstacleAvoidance(m_stUSVMotion, m_stTargetMotion);
-		// 		Obs_avoidance_flag = 1;
-		// 		obs_flag = 1;
-		// 	}
-		// }
+		int obs_flag=0;
+
 		if(obs_flag == 0)
 		{
-			temp_stUsvGoalHnV = LOS_Tracking(m_stWPInfo, m_stUSVMotion);
-			Obs_avoidance_flag = 0;
+		temp_stUsvGoalHnV = LOS_Tracking(m_stWPInfo, m_stUSVMotion);
+		Obs_avoidance_flag = 0;
 		}
-		/***************************************************************************************/
-		//obstacle is the one.
-		/***************************************************************************************/
-		// stUsvGoalHnV temp_stUsvGoalHnV;
-		// if (m_pf_init.avoidance_radius > m_stTargetMotion.stdDISTANCE[0] && m_stTargetMotion.stdCOG[0] < 30 && m_stTargetMotion.stdCOG[0] > -30 )// check to detect obstacle in the front
-		// {
-		// 	temp_stUsvGoalHnV = ObstacleAvoidance(m_stUSVMotion, m_stTargetMotion);
-		// 	Obs_avoidance_flag = 1;
-		// 	obs_flag = 1;
-		// }
-		// else
-		// {
-		// 	temp_stUsvGoalHnV = LOS_Tracking(m_stWPInfo, m_stUSVMotion);
-		// 	Obs_avoidance_flag = 0;
-		// }
-		/***************************************************************************************/
-		//obstacle is the one.
-		/***************************************************************************************/
-		// m_stUsvGoalHnV = Heading_LimitForSimulator(temp_stUsvGoalHnV, pre_m_stUsvGoalHnV);
-		// memcpy(&pre_m_stUsvGoalHnV, &m_stUsvGoalHnV, sizeof(m_stUsvGoalHnV));
 
 		memcpy(&m_stUsvGoalHnV, &temp_stUsvGoalHnV, sizeof(m_stUsvGoalHnV));
 
 		DataLogging(m_stWPInfo, m_stUSVMotion, m_stTargetMotion, m_stUsvGoalHnV, distance_usv2wp);
-		
-		cout << "m_stUsvGoalHnV.heading : "		<< m_stUsvGoalHnV.heading 	<< endl;
-		cout << "m_stUsvGoalHnV.velocity : "	<< m_stUsvGoalHnV.velocity 	<< endl;
 
+		memset(&Buffer, 0 , sizeof(Buffer));
 		//this code is typed for real test
-		m_mutex.lock();
-		gAutoNaviStatusInfo.DestinationPathID	= m_stWPInfo.stnWPnum;
+		mAutoNaviStatusInfo.DestinationPathID	= m_stWPInfo.stnWPnum;
 		if(obs_flag == 0)
-			gAutoNaviStatusInfo.AutoNaviStatus	= 0;
+		mAutoNaviStatusInfo.AutoNaviStatus	= 0;
 		else if(obs_flag == 1)
-			gAutoNaviStatusInfo.AutoNaviStatus	= 3;
-
-		gAutoNaviStatusInfo.Heading				= m_stUsvGoalHnV.heading;
-		gAutoNaviStatusInfo.Velocity			= m_stUsvGoalHnV.velocity;
-		gAutoNaviStatusInfo.FailStatus			= 0;	
-
-		ServerSystemCtrl_UsvAlgorithm_Socket.HeaderSetting(&mHeader, 0xff, 0xff, 0x1501, sizeof(AutoNaviStatusInfo), 0xff);
-		ServerSystemCtrl_UsvAlgorithm_Socket.MessageCombination(Buffer, mHeader, gAutoNaviStatusInfo);
-		ServerSystemCtrl_UsvAlgorithm_Socket.ClientToServer_Send(Buffer, ServerSystemCtrl_UsvAlgorithm_Socket, COMM_HEADER_SIZE + mHeader.Payload_Length);
-		m_mutex.unlock();
-		//this code is typed for real test
-		
-	}
-	return 0;
+		mAutoNaviStatusInfo.AutoNaviStatus	= 3;
+		mAutoNaviStatusInfo.Heading				= (unsigned short) m_stUsvGoalHnV.heading * 100;
+		mAutoNaviStatusInfo.Velocity			= (unsigned short) m_stUsvGoalHnV.velocity * 100;
+		mAutoNaviStatusInfo.FailStatus			= 0;	
+	}//if(mUSVModeCommand.ModeDetail == 3) // 운용모드 확인 후 자율 운항 시작
+	
+	return mAutoNaviStatusInfo;
 }
 
 stUsvGoalHnV Heading_LimitForSimulator(stUsvGoalHnV m_stUsvGoalHnV, stUsvGoalHnV pre_m_stUsvGoalHnV)
@@ -718,7 +454,7 @@ void DataLogging_Init(void)
 	timer = time(NULL);
 	t = localtime(&timer);
 
-	string test = "Vo_Alg_";
+	string test = ".\\SystemCtrl_Log\\LOS_PF_";
 	test += std::to_string(t->tm_year + 1900);
 	test += "_";
 	test += std::to_string(t->tm_mon + 1);
@@ -730,7 +466,7 @@ void DataLogging_Init(void)
 	test += std::to_string(t->tm_min);
 	test += "_";
 	test += std::to_string(t->tm_sec);
-	test += ".csv";
+	test += ".txt";
 
 	AlgLoggingFile.open(test);
 	AlgLoggingFile.setf(ios::fixed);
@@ -787,20 +523,3 @@ float degree_noise(void)
 	std::uniform_real_distribution<float> dis(-3, 3);
 	return dis(gen);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

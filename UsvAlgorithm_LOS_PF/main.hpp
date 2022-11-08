@@ -38,10 +38,8 @@ mutex m_mutex;
 float mt = 1.0;
 unsigned int Obs_avoidance_flag = 0;
 
-void mCommunicationUDP();
-void mPotentialFieldAlgorithm();
 
-int PotentailField();
+AutoNaviStatusInfo PotentailField(USVModeCommand mUSVModeCommand, MissionRecordInfo mMissionRecordInfo, NavigationInfo mNavigationInfo,FlexTargetInfo mFlexTargetInfo );
 stUsvGoalHnV Heading_LimitForSimulator(stUsvGoalHnV m_stUsvGoalHnV, stUsvGoalHnV pre_m_stUsvGoalHnV);
 stUsvGoalHnV LOS_Tracking(stWPInfo m_stWPInfo, stUSVMotion m_stUSVMotion);
 stUsvGoalHnV ObstacleAvoidance(stUSVMotion m_stUSVMotion, stTargetMotion m_stTargetMotion);
@@ -73,13 +71,3 @@ PlatformControlState		    gPlatformControlState;
 PlatformStatusInfo			    gPlatformStatusInfo;
 PowerControlResult			    gPowerControlResult;
 AcousticCommInfo			    gAcousticCommInfo;
-
-
-
-
-
-
-
-
-
-
