@@ -39,13 +39,12 @@ float mt = 1.0;
 unsigned int Obs_avoidance_flag = 0;
 
 
-AutoNaviStatusInfo PotentailField(USVModeCommand mUSVModeCommand, MissionRecordInfo mMissionRecordInfo, NavigationInfo mNavigationInfo,FlexTargetInfo mFlexTargetInfo );
+AutoNaviStatusInfo PotentailField(USVModeCommand mUSVModeCommand, NavigationInfo mNavigationInfo,FlexTargetInfo mFlexTargetInfo );
 stUsvGoalHnV Heading_LimitForSimulator(stUsvGoalHnV m_stUsvGoalHnV, stUsvGoalHnV pre_m_stUsvGoalHnV);
 stUsvGoalHnV LOS_Tracking(stWPInfo m_stWPInfo, stUSVMotion m_stUSVMotion);
-stUsvGoalHnV ObstacleAvoidance(stUSVMotion m_stUSVMotion, stTargetMotion m_stTargetMotion);
+stUsvGoalHnV ObstacleAvoidance(stWPInfo m_stWPInfo, stUSVMotion m_stUSVMotion, stTargetMotion m_stTargetMotion);
 void DataLogging(stWPInfo m_stWPInfo, stUSVMotion m_stUSVMotion, stTargetMotion m_stTargetMotion, stUsvGoalHnV m_stUsvGoalHnV, double distance_usv2wp);
 
-void DataLogging_Init(void);
 void Setting_Init(void);
 float velocity_noise(void);
 float degree_noise(void);
@@ -71,3 +70,4 @@ PlatformControlState		    gPlatformControlState;
 PlatformStatusInfo			    gPlatformStatusInfo;
 PowerControlResult			    gPowerControlResult;
 AcousticCommInfo			    gAcousticCommInfo;
+stWPInfo                        g_stWPInfo;

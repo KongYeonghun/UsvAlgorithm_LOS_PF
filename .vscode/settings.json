@@ -3,6 +3,9 @@
         "random": "cpp",
         "ostream": "cpp",
         "mutex": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "xutility": "cpp",
+        "string": "cpp",
+        "cmath": "cpp"
     }
 }

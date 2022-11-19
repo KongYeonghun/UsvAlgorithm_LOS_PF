@@ -800,8 +800,8 @@ typedef struct stUsvGoalHeadingNVelocity{
 }stUsvGoalHnV;
 
 typedef struct PotentialFieldAlgorithmInit {
-	double AVOIDANCE_RADIUS;//meter
-	double PF_CONSTANT_PARAMETER;
+	double AVOIDANCE_RADIUS;//meter, 
+	double AVOIDANCE_ANGLE;	
 	double HEADING_LIMIT;
 	double COLEGS_RULE_RADIUS;
 }PF_INIT;
